@@ -28,6 +28,9 @@ License: GPLv2 or later
 if ( ! defined( 'WP_LOAD_IMPORTERS' ) )
 	return;
 
+if ( ! defined( 'ATTACHMENT_FILES_IMPORT_DEBUG' ) )
+	define('ATTACHMENT_FILES_IMPORT_DEBUG', false);
+
 // Load Importer API
 require_once ABSPATH . 'wp-admin/includes/import.php';
 
@@ -135,7 +138,12 @@ class AF_Import extends WP_Importer {
 	function process_posts() {
 		$this->posts = apply_filters( 'attachment_files_importer_posts', $this->posts );
 
-		$nb_files_imported = 0;
+		$stats = array(
+			'imported' => 0,
+			'already_exists' => 0,
+			'other_error' => 0,
+		);
+
 		foreach ( $this->posts as $post ) {
 			$post = apply_filters( 'attachment_files_importer_post_data_raw', $post );
 
@@ -158,22 +166,61 @@ class AF_Import extends WP_Importer {
 				}
 			}
 
-			if ($this->process_attachment( $postdata, $remote_url ) === true) {
-				$nb_files_imported++;
+			$process_result = $this->process_attachment( $postdata, $remote_url );
+
+			if (is_wp_error($process_result)) {
+				if (
+					array_key_exists('upload_dir_error', $process_result->errors)
+					&& in_array('File already exists', $process_result->errors['upload_dir_error'])
+				) {
+					$stats['already_exists']++;
+					if (ATTACHMENT_FILES_IMPORT_DEBUG) {
+						echo '<div style="background-color:#bbbbff;color:blue;">File already exists<br><a href="'.$remote_url.'" target="_blank">'.$remote_url.'</a></div>';
+					}
+				}
+				else{
+					$stats['other_error']++;
+					echo '<div style="background-color:#ffbbbb;color:red;">';
+					$errors = array();
+					foreach ($process_result->errors as $errors_key => $errors_value) {
+						$errors = array_merge($errors, $errors_value);
+					}
+					echo implode(', ', $errors).'<br><a href="'.$remote_url.'" target="_blank">'.$remote_url.'</a></div>';
+				}
+			}
+			else{
+				$stats['imported']++;
+				if (ATTACHMENT_FILES_IMPORT_DEBUG) {
+					echo '<div style="background-color:#bbffbb;color:green;">File imported<br><a href="'.$remote_url.'" target="_blank">'.$remote_url.'</a></div>';
+				}
 			}
 		}
 
+		$file_html_link = '<a href="'.$this->base_url.'" target="_blank">'.$this->base_url.'</a>';
+		$msg = array();
+
 		echo '<p>';
-		switch($nb_files_imported) {
+		switch($stats['imported']) {
 			case 0:
-				printf(__('No file has been imported from %s. You\'re synced!'), '<a href="'.$this->base_url.'" target="_blank">'.$this->base_url.'</a>');
+				$msg[] = sprintf(__('No file has been imported from %s.'), $file_html_link);
 				break;
 			case 1:
-				printf(__('One file has been imported from %s. You\'re synced!'), '<a href="'.$this->base_url.'" target="_blank">'.$this->base_url.'</a>');
+				$msg[] = sprintf(__('One file has been imported from %s.'), $file_html_link);
 				break;
 			default:
-				printf(__('%s files has been imported from %s. You\'re synced!'), $nb_files_imported, '<a href="'.$this->base_url.'" target="_blank">'.$this->base_url.'</a>');
-		} 
+				$msg[] = sprintf(__('%s files has been imported from %s.'), $stats['imported'], $file_html_link);
+		}
+		switch($stats['already_exists']) {
+			case 0:
+				break;
+			case 1:
+				$msg[] = __('One file was already there.');
+				break;
+			default:
+				$msg[] = sprintf(__('%s files were already there.'), $stats['already_exists']);
+		}
+		$msg[] = __('You\'re synced!');
+		echo implode('<br>', $msg);
 		echo '</p>';
 
 		unset( $this->posts );
@@ -195,7 +242,7 @@ class AF_Import extends WP_Importer {
 		if ( is_wp_error( $upload ) )
 			return $upload;
 
-		if ( $info = wp_check_filetype( $upload['file'] ) )
+		if ( wp_check_filetype( $upload['file'] ) )
 			return true;
 		else
 			return new WP_Error( 'attachment_processing_error', __('Invalid file type', 'attachment-files-importer') );
