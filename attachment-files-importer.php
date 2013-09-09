@@ -108,7 +108,7 @@ class AF_Import extends WP_Importer {
 		$import_data = $this->get_import_data();
 
 		$this->posts = $import_data['posts'];
-		$this->base_url = esc_url($_POST['server_url']);
+		$this->base_url = untrailingslashit(esc_url($_POST['server_url']));
 
 		do_action( 'import_start' );
 	}
