@@ -28,6 +28,13 @@ In the admin, go to *Tools/Import* and choose the *Attachment files* importer. F
 
 Existing files will not be overriden.
 
+= Debug =
+The plugin is in an early stage and bugs may occurs. If you want to show a detailled report of the importation process, add this line to your __wp-config.php__ file:
+
+~~~php
+define('ATTACHMENT_FILES_IMPORT_DEBUG', true); 
+~~~
+
 == Installation ==
 
 1. Upload the `attachment-files-importer` folder to the `/wp-content/plugins/` directory
