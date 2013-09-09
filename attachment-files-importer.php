@@ -135,48 +135,46 @@ class AF_Import extends WP_Importer {
 	function process_posts() {
 		$this->posts = apply_filters( 'attachment_files_importer_posts', $this->posts );
 
+		$nb_files_imported = 0;
 		foreach ( $this->posts as $post ) {
 			$post = apply_filters( 'attachment_files_importer_post_data_raw', $post );
 
-			if ( $post['status'] == 'auto-draft' )
+			if ( $post['status'] == 'auto-draft' || 'attachment' != $post['post_type'] )
 				continue;
 
-			$post_type_object = get_post_type_object( $post['post_type'] );
+			$local_url = ! empty($post['attachment_url']) ? $post['attachment_url'] : $post['guid'];
+			$remote_url = $this->base_url . parse_url($local_url, PHP_URL_PATH);
 
-			$postdata = array(
-				'import_id' => $post['post_id'], 'post_author' => $author, 'post_date' => $post['post_date'],
-				'post_date_gmt' => $post['post_date_gmt'], 'post_content' => $post['post_content'],
-				'post_excerpt' => $post['post_excerpt'], 'post_title' => $post['post_title'],
-				'post_status' => $post['status'], 'post_name' => $post['post_name'],
-				'comment_status' => $post['comment_status'], 'ping_status' => $post['ping_status'],
-				'guid' => $post['guid'], 'post_parent' => $post_parent, 'menu_order' => $post['menu_order'],
-				'post_type' => $post['post_type'], 'post_password' => $post['post_password']
-			);
-
-			$postdata = apply_filters( 'attachment_files_importer_post_data_processed', $postdata, $post );
-
-			if ( 'attachment' == $postdata['post_type'] ) {
-				$local_url = ! empty($post['attachment_url']) ? $post['attachment_url'] : $post['guid'];
-				$remote_url = $this->base_url . parse_url($local_url, PHP_URL_PATH);
-
-				// try to use _wp_attached file for upload folder placement to ensure the same location as the export site
-				// e.g. location is 2003/05/image.jpg but the attachment post_date is 2010/09, see media_handle_upload()
-				$postdata['upload_date'] = $post['post_date'];
-				if ( isset( $post['postmeta'] ) ) {
-					foreach( $post['postmeta'] as $meta ) {
-						if ( $meta['key'] == '_wp_attached_file' ) {
-							if ( preg_match( '%^[0-9]{4}/[0-9]{2}%', $meta['value'], $matches ) )
-								$postdata['upload_date'] = $matches[0];
-							break;
-						}
+			// try to use _wp_attached file for upload folder placement to ensure the same location as the export site
+			// e.g. location is 2003/05/image.jpg but the attachment post_date is 2010/09, see media_handle_upload()
+			$postdata = array('upload_date' => $post['post_date']);
+			if ( isset( $post['postmeta'] ) ) {
+				foreach( $post['postmeta'] as $meta_key => $arr_value ) {
+					if ( $meta_key == '_wp_attached_file' ) {
+						if ( preg_match( '%^[0-9]{4}/[0-9]{2}%', $arr_value[0], $matches ) )
+							$postdata['upload_date'] = $matches[0];
+						break;
 					}
 				}
+			}
 
-				$this->process_attachment( $postdata, $remote_url );
-			} else {
-				continue;
+			if ($this->process_attachment( $postdata, $remote_url ) === true) {
+				$nb_files_imported++;
 			}
 		}
+
+		echo '<p>';
+		switch($nb_files_imported) {
+			case 0:
+				printf(__('No file has been imported from %s. You\'re synced!'), '<a href="'.$this->base_url.'" target="_blank">'.$this->base_url.'</a>');
+				break;
+			case 1:
+				printf(__('One file has been imported from %s. You\'re synced!'), '<a href="'.$this->base_url.'" target="_blank">'.$this->base_url.'</a>');
+				break;
+			default:
+				printf(__('%s files has been imported from %s. You\'re synced!'), $nb_files_imported, '<a href="'.$this->base_url.'" target="_blank">'.$this->base_url.'</a>');
+		} 
+		echo '</p>';
 
 		unset( $this->posts );
 	}
@@ -198,7 +196,7 @@ class AF_Import extends WP_Importer {
 			return $upload;
 
 		if ( $info = wp_check_filetype( $upload['file'] ) )
-			$post['post_mime_type'] = $info['type'];
+			return true;
 		else
 			return new WP_Error( 'attachment_processing_error', __('Invalid file type', 'attachment-files-importer') );
 	}
@@ -316,7 +314,7 @@ class AF_Import extends WP_Importer {
 				'post_password' => $post_attachments[$k]->post_password,
 				'is_sticky' => is_sticky($post_attachments[$k]->ID)?1:0,
 				'attachment_url' => wp_get_attachment_url($post_attachments[$k]->ID),
-				'postmeta' => get_post_meta($post_attachments[$k]->ID),
+				'postmeta' => get_post_meta($post_attachments[$k]->ID), // Not the same format.
 			);
 		}
 		return $import_data;
