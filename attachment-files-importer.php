@@ -2,7 +2,7 @@
 /*
 Plugin Name: Attachment Files Importer
 Description: Scan your Wordpress installation for all missing attachment files and download them from another Wordpress installation.
-Version: 0.0.1
+Version: 0.2.1
 Author: KLicheR
 Author URI: https://github.com/KLicheR
 Text Domain: attachment-files-importer
@@ -193,6 +193,9 @@ class AF_Import extends WP_Importer {
 				if (ATTACHMENT_FILES_IMPORT_DEBUG) {
 					echo '<div style="background-color:#bbffbb;color:green;">File imported<br><a href="'.$remote_url.'" target="_blank">'.$remote_url.'</a></div>';
 				}
+
+				// Process image sizes.
+				$this->process_image_sizes($post['post_id']);
 			}
 		}
 
@@ -246,6 +249,58 @@ class AF_Import extends WP_Importer {
 			return true;
 		else
 			return new WP_Error( 'attachment_processing_error', __('Invalid file type', 'attachment-files-importer') );
+	}
+
+	/**
+	 * Create the different format sizes of an image attachment. Inpired by "ajax-thumbnail-rebuild" plugin.
+	 *
+	 *
+	 */
+	function process_image_sizes($id) {
+		set_time_limit( 30 );
+
+		$sizes = $this->get_image_sizes();
+		$sizes = apply_filters( 'intermediate_image_sizes_advanced', $sizes );
+
+		$file = get_attached_file( $id );
+
+		foreach ($sizes as $size => $size_data ) {
+			image_make_intermediate_size( $file, $size_data['width'], $size_data['height'], $size_data['crop'] );
+		}
+	}
+
+	/**
+	 * Got from "ajax-thumbnail-rebuild" plugin.
+	 *
+	 *
+	 */
+	function get_image_sizes() {
+		global $_wp_additional_image_sizes;
+
+		foreach ( get_intermediate_image_sizes() as $s ) {
+			$sizes[$s] = array( 'name' => '', 'width' => '', 'height' => '', 'crop' => FALSE );
+
+			/* Read theme added sizes or fall back to default sizes set in options... */
+
+			$sizes[$s]['name'] = $s;
+
+			if ( isset( $_wp_additional_image_sizes[$s]['width'] ) )
+				$sizes[$s]['width'] = intval( $_wp_additional_image_sizes[$s]['width'] ); 
+			else
+				$sizes[$s]['width'] = get_option( "{$s}_size_w" );
+
+			if ( isset( $_wp_additional_image_sizes[$s]['height'] ) )
+				$sizes[$s]['height'] = intval( $_wp_additional_image_sizes[$s]['height'] );
+			else
+				$sizes[$s]['height'] = get_option( "{$s}_size_h" );
+
+			if ( isset( $_wp_additional_image_sizes[$s]['crop'] ) )
+				$sizes[$s]['crop'] = intval( $_wp_additional_image_sizes[$s]['crop'] );
+			else
+				$sizes[$s]['crop'] = get_option( "{$s}_crop" );
+		}
+
+		return $sizes;
 	}
 
 	/**
