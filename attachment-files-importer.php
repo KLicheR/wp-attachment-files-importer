@@ -2,7 +2,7 @@
 /*
 Plugin Name: Attachment Files Importer
 Description: Scan your Wordpress installation for all missing attachment files and download them from another Wordpress installation.
-Version: 0.2.1
+Version: 0.3.0
 Author: KLicheR
 Author URI: https://github.com/KLicheR
 Text Domain: attachment-files-importer
@@ -51,6 +51,8 @@ class AF_Import extends WP_Importer {
 	// information to import from WXR file
 	var $posts = array();
 	var $base_url = '';
+
+	var $image_sizes_to_process = array();
 
 	function AF_Import() { /* nothing */ }
 
@@ -103,7 +105,7 @@ class AF_Import extends WP_Importer {
 	 */
 	function import_start() {
 		if (empty($_POST['server_url'])) {
-			echo '<p><strong>' . __( 'Sorry, there has been an error.', 'attachment-files-importer' ) . '</strong><br />';
+			echo '<p><strong>' . __( 'An error occured.', 'attachment-files-importer' ) . '</strong><br />';
 			echo __( 'The server URL is not valid, please try again.', 'attachment-files-importer' ) . '</p>';
 			$this->footer();
 			die();
@@ -112,6 +114,9 @@ class AF_Import extends WP_Importer {
 
 		$this->posts = $import_data['posts'];
 		$this->base_url = untrailingslashit(esc_url($_POST['server_url']));
+
+		if (isset($_POST['thumbnails']))
+			$this->image_sizes_to_process = $_POST['thumbnails'];
 
 		do_action( 'import_start' );
 	}
@@ -205,24 +210,24 @@ class AF_Import extends WP_Importer {
 		echo '<p>';
 		switch($stats['imported']) {
 			case 0:
-				$msg[] = sprintf(__('No file has been imported from %s.'), $file_html_link);
+				$msg[] = sprintf(__('No file has been imported from %s.', 'attachment-files-importer'), $file_html_link);
 				break;
 			case 1:
-				$msg[] = sprintf(__('One file has been imported from %s.'), $file_html_link);
+				$msg[] = sprintf(__('One file has been imported from %s.', 'attachment-files-importer'), $file_html_link);
 				break;
 			default:
-				$msg[] = sprintf(__('%s files has been imported from %s.'), $stats['imported'], $file_html_link);
+				$msg[] = sprintf(__('%s files has been imported from %s.', 'attachment-files-importer'), $stats['imported'], $file_html_link);
 		}
 		switch($stats['already_exists']) {
 			case 0:
 				break;
 			case 1:
-				$msg[] = __('One file was already there.');
+				$msg[] = __('One file was already there.', 'attachment-files-importer');
 				break;
 			default:
-				$msg[] = sprintf(__('%s files were already there.'), $stats['already_exists']);
+				$msg[] = sprintf(__('%s files were already there.', 'attachment-files-importer'), $stats['already_exists']);
 		}
-		$msg[] = __('You\'re synced!');
+		$msg[] = __('You\'re media library is synced!', 'attachment-files-importer');
 		echo implode('<br>', $msg);
 		echo '</p>';
 
@@ -253,8 +258,6 @@ class AF_Import extends WP_Importer {
 
 	/**
 	 * Create the different format sizes of an image attachment. Inpired by "ajax-thumbnail-rebuild" plugin.
-	 *
-	 *
 	 */
 	function process_image_sizes($id) {
 		set_time_limit( 30 );
@@ -265,14 +268,17 @@ class AF_Import extends WP_Importer {
 		$file = get_attached_file( $id );
 
 		foreach ($sizes as $size => $size_data ) {
-			image_make_intermediate_size( $file, $size_data['width'], $size_data['height'], $size_data['crop'] );
+			// If the image size has been checked for resize.
+			if (array_search($size, $this->image_sizes_to_process) !== false) {
+				image_make_intermediate_size( $file, $size_data['width'], $size_data['height'], $size_data['crop'] );
+			}
 		}
 	}
 
 	/**
 	 * Got from "ajax-thumbnail-rebuild" plugin.
 	 *
-	 *
+	 * @return array Images sizes infos.
 	 */
 	function get_image_sizes() {
 		global $_wp_additional_image_sizes;
@@ -448,15 +454,17 @@ class AF_Import extends WP_Importer {
 	 */
 	function greet() {
 		echo '<div class="narrow">';
-		echo '<p>'.__( 'Indicate the URL of the server that contain the attachment files corresponding to the attachments of this site and we&quot;ll download them into this site.', 'attachment-files-importer' ).'</p>';
-		echo '<p>'.__( 'Enter the URL of the server, then click Import.', 'attachment-files-importer' ).'</p>';
+		echo '<p>'.__( 'Indicate the URL of the server that contain the attachment files to import. You can also specified image sizes for automatic resizes or use later use a plugin like <a href="http://wordpress.org/plugins/ajax-thumbnail-rebuild">AJAX Thumbnail Rebuild</a> to perform the resizes of the originals images.', 'attachment-files-importer' ).'</p>';
+		echo '<h4>'.__( 'Enter the URL of the server, then click Import.', 'attachment-files-importer' ).'</h4>';
 		
 		$bytes = apply_filters( 'import_upload_size_limit', wp_max_upload_size() );
 		$size = size_format( $bytes );
 		$upload_dir = wp_upload_dir();
 		if ( ! empty( $upload_dir['error'] ) ) :
-			?><div class="error"><p><?php _e('Before you can import files, you will need to fix the following error:', 'attachment-files-importer'); ?></p>
-			<p><strong><?php echo $upload_dir['error']; ?></strong></p></div><?php
+?>
+			<div class="error"><p><?php _e('Before you can import files, you will need to fix the following error:', 'attachment-files-importer'); ?></p>
+			<p><strong><?php echo $upload_dir['error']; ?></strong></p></div>
+<?php
 		else :
 ?>
 			<form method="post" action="<?php echo esc_attr(wp_nonce_url('admin.php?import=attachment-files&amp;step=1', 'import-attachment-files')); ?>">
@@ -465,7 +473,24 @@ class AF_Import extends WP_Importer {
 					<input type="text" id="server_url" name="server_url" />
 					<input type="hidden" name="action" value="save" />
 				</p>
-				<?php submit_button( __('Import'), 'button' ); ?>
+				<h4><?php _e('Select which image sizes you want to rebuild', 'attachment-files-importer'); ?>:</h4>
+				<a href="javascript:void(0);" onclick="if(typeof afi_toggle=='undefined'){afi_toggle=true;}afi_toggle=!afi_toggle;jQuery('#sizeselect input').each(function(){this.checked=afi_toggle;});" id="size-toggle"><?php _e('Toggle all', 'attachment-files-importer'); ?></a>
+				<div id="sizeselect">
+					<?php
+						foreach ($this->get_image_sizes() as $s):
+					?>
+							<label>
+								<input type="checkbox" name="thumbnails[]" id="sizeselect" checked="checked" value="<?php echo $s['name'] ?>">
+								<em><?php echo $s['name'] ?></em>
+								&nbsp;(<?php echo $s['width'] ?>x<?php echo $s['height'] ?>
+								<?php if ($s['crop']) _e('cropped', 'attachment-files-importer'); ?>)
+							</label>
+							<br/>
+					<?php
+						endforeach;
+					?>
+				</div>
+				<?php submit_button( __('Import and resize', 'attachment-files-importer'), 'button' ); ?>
 			</form>
 <?php
 		endif;
@@ -514,7 +539,8 @@ class AF_Import extends WP_Importer {
 } // class_exists( 'WP_Importer' )
 
 function attachment_files_importer_init() {
-	// load_plugin_textdomain( 'attachment-files-importer', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+	load_plugin_textdomain( 'attachment-files-importer', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+	// echo('<pre>');var_dump(dirname( plugin_basename( __FILE__ ) ) . '/languages');exit;
 
 	/**
 	 * Attachment Files Importer object for registering the import callback

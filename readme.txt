@@ -4,7 +4,7 @@ Donate link:
 Tags: importer, import, attachments, files
 Requires at least: 3.5
 Tested up to: 3.6
-Stable tag: 0.2.1
+Stable tag: 0.3.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,9 +12,9 @@ Scan your Wordpress installation for all missing attachment files and download t
 
 == Description ==
 
-Scan your Wordpress installation for all missing attachment files and download them from another Wordpress installation.
+Scan your Wordpress installation for all missing attachment files, download them from another Wordpress installation and resize them with your defined image sizes.
 
-Know that the plugin will not create new media on your installation, it'll just use the existings entries of medias in your database to retrieve the physical files on another Wordpress installation.
+Know that the plugin will not create new media on your installation database, it'll just use the existings entries of medias in your database to retrieve the physical files on another Wordpress installation.
 
 **E.g.**: *http://serverA.com* have an entry for the *mediaX* in his database. The path for the physical file is supposed to be *http://serverA.com/wp-content/uploads/2013/06/mediaX.jpg* but it's not here. If you know that this same media exists on *http://serverB.com* + the physical file, you can use this plugin on *http://serverA.com*, specifying *http://serverB.com* in the *Server URL* field and the plugin will search the file here: *http://serverB.com/wp-content/uploads/2013/06/mediaX.jpg*. If it find it, it will be downloaded here: *http://serverA.com/wp-content/uploads/2013/06/mediaX.jpg*.
 
